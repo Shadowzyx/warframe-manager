@@ -1,0 +1,77 @@
+version: '2.1'
+
+services:
+    front:
+        build: docker/front
+        depends_on:
+            - app
+        volumes_from:
+            - data
+        volumes:
+            - ./docker/front/config/app.conf:/etc/nginx/conf.d/app.conf
+
+    app:
+        build: docker/app
+        depends_on:
+            db:
+                condition: service_started
+            mailcatcher:
+                condition: service_started
+        volumes_from:
+            - data
+        env_file:
+            - docker/settings/env
+            - docker/settings/env_access
+        environment:
+            - PHP_IDE_CONFIG=serverName=lastmile
+
+    data:
+        image: busybox
+        volumes:
+            - .:/var/www/html
+
+    db:
+        image: mysql:5.7
+        depends_on:
+              - data
+        volumes:
+            - mysql:/var/lib/mysql
+        env_file:
+            - docker/settings/mysql
+
+    tools:
+        build: docker/tools
+        depends_on:
+            db:
+                condition: service_started
+            mailcatcher:
+                condition: service_started
+        volumes:
+            - $SSH_AUTH_SOCK:/tmp/agent.sock
+            - ~/.gitconfig:/var/www/.gitconfig
+            - ~/.ssh/known_hosts:/var/www/.ssh/known_hosts
+            - ~/.composer:/var/www/.composer
+            - ./data/.bash_history:/var/www/.bash_history
+        environment:
+            - SSH_AUTH_SOCK=/tmp/agent.sock
+            - PHP_IDE_CONFIG=serverName=lastmile
+        volumes_from:
+            - data
+        env_file:
+            - docker/settings/env
+            - docker/settings/env_access
+            - docker/settings/mysql
+
+    mailcatcher:
+        image: schickling/mailcatcher
+        env_file:
+            - docker/settings/env
+volumes:
+    mysql:
+
+networks:
+    default:
+        ipam:
+          driver: default
+          config:
+            - subnet: 10.11.0.0/16
